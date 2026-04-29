@@ -18,3 +18,7 @@ bool               toggleStatus(Catalog& cat, int id);
 std::vector<Entry> queryEntries(const Catalog& cat, SortField sort, const FilterOptions& opts);
 void               printTable(const std::vector<Entry>& entries, const std::string& label);
 void               printEntry(const Entry& e);
+
+// ✅ add in storage.hpp
+Catalog loadSharedCatalog();
+void    saveSharedCatalog(Catalog& cat);

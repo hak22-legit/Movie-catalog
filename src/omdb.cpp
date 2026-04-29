@@ -66,13 +66,14 @@ static std::optional<Entry> fetchByImdbID(httplib::Client& cli,
     try { j = json::parse(res->body); } catch (...) { return std::nullopt; }
     if (j.value("Response", "False") == "False") return std::nullopt;
 
-    Entry e;
+     Entry e;
     e.type       = MediaType::Movie;
     e.title      = j.value("Title",      "");
     e.genre      = j.value("Genre",      "");
     e.director   = j.value("Director",   "");
     e.plot       = j.value("Plot",       "");
     e.imdbRating = j.value("imdbRating", "");
+    e.posterUrl  = j.value("Poster",     "");  
     try { e.year = std::stoi(j.value("Year", "0").substr(0, 4)); } catch (...) {}
     return e;
 }

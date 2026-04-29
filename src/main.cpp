@@ -417,6 +417,18 @@ static void doView(Catalog& cat) {
             saveCatalog(cat);
             std::cout << "\n" << GREEN << BOLD
                       << centerPad("OMDb data saved!") << RESET << "\n\n";
+
+            // ── open poster ───────────────────────
+            if (!ep->posterUrl.empty() && ep->posterUrl != "N/A") {
+                if (inputYN(centerPad("Open movie poster in browser?"))) {
+                    std::string cmd = "start \"\" \"" + ep->posterUrl + "\"";
+                    system(cmd.c_str());
+                    std::cout << "\n" << GREEN << BOLD
+                              << centerPad("Poster opened in your browser!") << RESET << "\n\n";
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                }
+            }
+
             system("cls");
             printEntry(*ep);
         }
@@ -1004,9 +1016,45 @@ static void doOMDb(Catalog& cat) {
     resultRow("IMDb",     rat,                                          GREEN);
     std::cout << rbp << BLUE << "+" << std::string(16, '-') << "+" << std::string(51, '-') << "+" << RESET << "\n";
     resultRow("Plot",     res->plot.empty() ? "-" : res->plot,         BLACK);
+    std::cout << rbp << BLUE << "+" << std::string(16, '-') << "+" << std::string(51, '-') << "+" << RESET << "\n";
+    resultRow("Poster",   res->posterUrl.empty() || res->posterUrl == "N/A"
+                          ? "Not available" : "Available",             GREEN);
     std::cout << rbp << BLUE << "+" << std::string(68, '=') << "+" << RESET << "\n\n";
 
+    // ── open poster in browser ────────────────────
+    if (!res->posterUrl.empty() && res->posterUrl != "N/A") {
+        int termW3  = getTermWidth();
+        int pboxW   = 50;
+        int pppad   = (termW3 - pboxW) / 2;
+        if (pppad < 0) pppad = 0;
+        std::string ppp = std::string(pppad, ' ');
+
+        std::cout << ppp << BLUE << "+" << std::string(48, '=') << "+" << RESET << "\n";
+        std::cout << ppp << BLUE << "|" << RESET
+                  << BOLD << BLACK << "     Movie poster is available to view!       " << RESET
+                  << "  " << BLUE << "|" << RESET << "\n";
+        std::cout << ppp << BLUE << "+" << std::string(48, '=') << "+" << RESET << "\n\n";
+
+        if (inputYN(centerPad("Open poster in browser?"), reprintHeader)) {
+            std::string cmd = "start \"\" \"" + res->posterUrl + "\"";
+            system(cmd.c_str());
+            std::cout << "\n" << GREEN << BOLD
+                      << centerPad("Poster opened in your browser!") << RESET << "\n\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }
+    }
+
     // ── add to catalog ────────────────────────────
+     if (cat.username == "guest") {
+        std::cout << "\n" << YELLOW << BOLD
+                  << centerPad("Guest mode — please login to save entries.")
+                  << RESET << "\n\n";
+        std::cout << BLUE << BOLD
+                  << centerPad("Press Enter to go back...") << RESET;
+        while (_getch() != '\r') {}
+        system("cls");
+        return;
+    }
     if (inputYN(centerPad("Add to catalog?"), reprintHeader)) {
         Entry e   = *res;
         e.rating  = inputFloat(centerPad("Rating 1-10 : "), 1.0f, 10.0f, reprintHeader);
@@ -1561,6 +1609,293 @@ static void adminDeleteUser() {
     system("cls");
 }
 
+static void doAdminAddMovie(Catalog& sharedCat) {
+    system("cls");
+
+    int termW = getTermWidth();
+    auto cl = [&](const std::string& s, int visualW) {
+        int p = (termW - visualW) / 2;
+        if (p < 0) p = 0;
+        std::cout << std::string(p, ' ') << s << "\n";
+    };
+
+    // ── ASCII ADD MOVIE ───────────────────────────
+    auto reprintHeader = [&]() {
+        std::cout << "\n" << GREEN << BOLD;
+        cl(" █████╗ ██████╗ ██████╗     ███╗   ███╗ ██████╗ ██╗   ██╗██╗███████╗", 70);
+        cl("██╔══██╗██╔══██╗██╔══██╗    ████╗ ████║██╔═══██╗██║   ██║██║██╔════╝", 70);
+        cl("███████║██║  ██║██║  ██║    ██╔████╔██║██║   ██║██║   ██║██║█████╗  ", 70);
+        cl("██╔══██║██║  ██║██║  ██║    ██║╚██╔╝██║██║   ██║╚██╗ ██╔╝██║██╔══╝  ", 70);
+        cl("██║  ██║██████╔╝██████╔╝    ██║ ╚═╝ ██║╚██████╔╝ ╚████╔╝ ██║███████╗", 70);
+        cl("╚═╝  ╚═╝╚═════╝ ╚═════╝     ╚═╝     ╚═╝ ╚═════╝   ╚═══╝  ╚═╝╚══════╝", 70);
+        std::cout << RESET << "\n";
+    };
+
+    reprintHeader();
+
+    // ── form box ──────────────────────────────────
+    int boxW  = 52;
+    int tpad  = (termW - boxW) / 2;
+    if (tpad < 0) tpad = 0;
+    std::string tp = std::string(tpad, ' ');
+
+    auto hlineForm = [&](char fill) {
+        std::cout << tp << BLUE
+                  << "+" << std::string(16, fill)
+                  << "+" << std::string(34, fill)
+                  << "+" << RESET << "\n";
+    };
+
+    auto formRow = [&](const std::string& field, const std::string& desc) {
+        int fp = 15 - (int)field.size();
+        int dp = 33 - (int)desc.size();
+        if (fp < 0) fp = 0;
+        if (dp < 0) dp = 0;
+        std::cout << tp << BLUE << "|" << RESET
+                  << " " << BLUE << BOLD << field << RESET
+                  << std::string(fp, ' ')
+                  << BLUE << "|" << RESET
+                  << " " << BLACK << desc << RESET
+                  << std::string(dp, ' ')
+                  << BLUE << "|" << RESET << "\n";
+    };
+
+    hlineForm('=');
+    formRow("Field",   "Description");
+    hlineForm('=');
+    formRow("Title",   "Enter movie title");
+    hlineForm('-');
+    formRow("Genre",   "e.g. Action, Sci-Fi, Drama");
+    hlineForm('-');
+    formRow("Year",    "1888 - 2100");
+    hlineForm('-');
+    formRow("Rating",  "1.0 - 10.0");
+    hlineForm('-');
+    formRow("Notes",   "Any notes (optional)");
+    hlineForm('=');
+    std::cout << "\n";
+
+    // ── inputs ────────────────────────────────────
+    Entry e;
+    e.type   = MediaType::Movie;
+    e.status = WatchStatus::Done;
+    e.title  = inputLine(centerPad("Title   : "), false, reprintHeader);
+    e.genre  = inputLine(centerPad("Genre   : "), true,  reprintHeader);
+    e.year   = inputInt (centerPad("Year    : "), 1888, 2100, reprintHeader);
+    e.rating = inputFloat(centerPad("Rating  : "), 1.0f, 10.0f, reprintHeader);
+    e.notes  = inputLine(centerPad("Notes   : "), true,  reprintHeader);
+
+    addEntry(sharedCat, e);
+    saveSharedCatalog(sharedCat);
+
+    system("cls");
+    reprintHeader();
+
+    // ── summary box ───────────────────────────────
+    int sumW  = 52;
+    int spad  = (termW - sumW) / 2;
+    if (spad < 0) spad = 0;
+    std::string sp2 = std::string(spad, ' ');
+
+    auto hlineSum = [&](char fill) {
+        std::cout << sp2 << BLUE
+                  << "+" << std::string(16, fill)
+                  << "+" << std::string(34, fill)
+                  << "+" << RESET << "\n";
+    };
+
+    auto sumRow = [&](const std::string& field,
+                      const std::string& value,
+                      const std::string& valueColor) {
+        int fp = 15 - (int)field.size();
+        int vp = 33 - (int)value.size();
+        if (fp < 0) fp = 0;
+        if (vp < 0) vp = 0;
+        std::cout << sp2 << BLUE << "|" << RESET
+                  << " " << BLUE << BOLD << field << RESET
+                  << std::string(fp, ' ')
+                  << BLUE << "|" << RESET
+                  << " " << valueColor << value << RESET
+                  << std::string(vp, ' ')
+                  << BLUE << "|" << RESET << "\n";
+    };
+
+    std::string ratingColor;
+    if      (e.rating >= 7.0f) ratingColor = GREEN;
+    else if (e.rating >= 5.0f) ratingColor = BLUE;
+    else                       ratingColor = RED;
+
+    std::cout << "\n" << GREEN << BOLD
+              << centerPad("MOVIE ADDED TO PUBLIC LIST!") << RESET << "\n\n";
+
+    hlineSum('=');
+    sumRow("Field",  "Value",                          BLUE);
+    hlineSum('=');
+    sumRow("ID",     std::to_string(sharedCat.entries.back().id), BLACK);
+    hlineSum('-');
+    sumRow("Title",  e.title,                          BLACK);
+    hlineSum('-');
+    sumRow("Genre",  e.genre.empty() ? "-" : e.genre,  BLACK);
+    hlineSum('-');
+    sumRow("Year",   std::to_string(e.year),            BLACK);
+    hlineSum('-');
+    sumRow("Rating", std::to_string((int)e.rating) + "/10", ratingColor);
+    hlineSum('-');
+    sumRow("Notes",  e.notes.empty() ? "-" : e.notes,  BLACK);
+    hlineSum('=');
+    std::cout << "\n";
+
+    std::cout << BLUE << BOLD
+              << centerPad("Press Enter to go back...") << RESET;
+    while (_getch() != '\r') {}
+    system("cls");
+}
+
+static void adminViewSharedCatalog(Catalog& sharedCat) {
+    system("cls");
+
+    int termW = getTermWidth();
+    auto cl = [&](const std::string& s, int visualW) {
+        int p = (termW - visualW) / 2;
+        if (p < 0) p = 0;
+        std::cout << std::string(p, ' ') << s << "\n";
+    };
+
+    std::cout << "\n" << CYAN << BOLD;
+    cl("██████╗ ██╗   ██╗██████╗ ██╗     ██╗ ██████╗    ██╗     ██╗███████╗████████╗", 79);
+    cl("██╔══██╗██║   ██║██╔══██╗██║     ██║██╔════╝    ██║     ██║██╔════╝╚══██╔══╝", 79);
+    cl("██████╔╝██║   ██║██████╔╝██║     ██║██║         ██║     ██║███████╗   ██║   ", 79);
+    cl("██╔═══╝ ██║   ██║██╔══██╗██║     ██║██║         ██║     ██║╚════██║   ██║   ", 79);
+    cl("██║     ╚██████╔╝██████╔╝███████╗██║╚██████╗    ███████╗██║███████║   ██║   ", 79);
+    cl("╚═╝      ╚═════╝ ╚═════╝ ╚══════╝╚═╝ ╚═════╝    ╚══════╝╚═╝╚══════╝   ╚═╝   ", 79);
+    std::cout << RESET << "\n";
+
+    if (sharedCat.entries.empty()) {
+        std::cout << "\n" << RED << BOLD
+                  << centerPad("No movies in public list yet.") << RESET << "\n\n";
+    } else {
+        printTable(sharedCat.entries, "Public List");
+    }
+
+    std::cout << BLUE << BOLD
+              << centerPad("Press Enter to go back...") << RESET;
+    while (_getch() != '\r') {}
+    system("cls");
+}
+
+static void adminDeletePublicMovie(Catalog& sharedCat) {
+    system("cls");
+
+    int termW = getTermWidth();
+    auto cl = [&](const std::string& s, int visualW) {
+        int p = (termW - visualW) / 2;
+        if (p < 0) p = 0;
+        std::cout << std::string(p, ' ') << s << "\n";
+    };
+
+    // ── ASCII header ──────────────────────────────
+    auto reprintHeader = [&]() {
+        std::cout << "\n" << RED << BOLD;
+        cl("██████╗ ███████╗██╗     ███████╗████████╗███████╗    ██████╗ ██╗   ██╗██████╗ ██╗     ██╗ ██████╗", 99);
+        cl("██╔══██╗██╔════╝██║     ██╔════╝╚══██╔══╝██╔════╝    ██╔══██╗██║   ██║██╔══██╗██║     ██║██╔════╝", 99);
+        cl("██║  ██║█████╗  ██║     █████╗     ██║   █████╗      ██████╔╝██║   ██║██████╔╝██║     ██║██║     ", 99);
+        cl("██║  ██║██╔══╝  ██║     ██╔══╝     ██║   ██╔══╝      ██╔═══╝ ██║   ██║██╔══██╗██║     ██║██║     ", 99);
+        cl("██████╔╝███████╗███████╗███████╗   ██║   ███████╗    ██║     ╚██████╔╝██████╔╝███████╗██║╚██████╗", 99);
+        cl("╚═════╝ ╚══════╝╚══════╝╚══════╝   ╚═╝   ╚══════╝    ╚═╝      ╚═════╝ ╚═════╝ ╚══════╝╚═╝ ╚═════╝", 99);
+        std::cout << RESET << "\n";
+    };
+
+    reprintHeader();
+
+    if (sharedCat.entries.empty()) {
+        std::cout << "\n" << RED << BOLD
+                  << centerPad("No movies in public list.") << RESET << "\n\n";
+        std::cout << BLUE << BOLD
+                  << centerPad("Press Enter to go back...") << RESET;
+        while (_getch() != '\r') {}
+        system("cls");
+        return;
+    }
+
+    // ── show public list ──────────────────────────
+    printTable(sharedCat.entries, "Public List");
+
+    // ── confirm box ───────────────────────────────
+    int termW2 = getTermWidth();
+    int boxW   = 50;
+    int bpad   = (termW2 - boxW) / 2;
+    if (bpad < 0) bpad = 0;
+    std::string bp = std::string(bpad, ' ');
+
+    // ── ID input ──────────────────────────────────
+    int id = inputInt(centerPad("Entry ID to delete: "), 1, 99999, [&]() {
+        system("cls");
+        reprintHeader();
+        printTable(sharedCat.entries, "Public List");
+    });
+
+    // ── find entry ────────────────────────────────
+    Entry* ep = nullptr;
+    for (auto& e : sharedCat.entries)
+        if (e.id == id) { ep = &e; break; }
+
+    if (!ep) {
+        std::cout << "\n" << RED << BOLD
+                  << centerPad("Entry not found.") << RESET << "\n\n";
+        std::cout << BLUE << BOLD
+                  << centerPad("Press Enter to go back...") << RESET;
+        while (_getch() != '\r') {}
+        system("cls");
+        return;
+    }
+
+    // ── show entry before confirm ─────────────────
+    system("cls");
+    reprintHeader();
+    printEntry(*ep);
+
+    std::cout << "\n";
+    std::cout << bp << RED << "+" << std::string(50, '=') << "+" << RESET << "\n";
+    std::cout << bp << RED << "|" << RESET
+              << BOLD << RED << "  ⚠  Are you sure you want to delete this movie?" << RESET
+              << "  " << RED << "|" << RESET << "\n";
+    std::cout << bp << RED << "+" << std::string(50, '=') << "+" << RESET << "\n\n";
+
+    if (inputYN(centerPad("Delete movie #" + std::to_string(id) + "?"), [&]() {
+            system("cls");
+            reprintHeader();
+            printEntry(*ep);
+        })) {
+        deleteEntry(sharedCat, id);
+        saveSharedCatalog(sharedCat);
+
+        system("cls");
+        reprintHeader();
+
+        int cpad = (termW2 - 40) / 2;
+        if (cpad < 0) cpad = 0;
+        std::string cp2 = std::string(cpad, ' ');
+
+        std::cout << "\n";
+        std::cout << cp2 << GREEN << "+" << std::string(38, '=') << "+" << RESET << "\n";
+        std::cout << cp2 << GREEN << "|" << RESET
+                  << BOLD << GREEN << "  Movie #" << id
+                  << " deleted from public list.   " << RESET
+                  << GREEN << "|" << RESET << "\n";
+        std::cout << cp2 << GREEN << "+" << std::string(38, '=') << "+" << RESET << "\n\n";
+    } else {
+        system("cls");
+        reprintHeader();
+        std::cout << "\n" << YELLOW << BOLD
+                  << centerPad("Cancelled. Movie was not deleted.") << RESET << "\n\n";
+    }
+
+    std::cout << BLUE << BOLD
+              << centerPad("Press Enter to go back...") << RESET;
+    while (_getch() != '\r') {}
+    system("cls");
+}
+
 static void printAdminMenu() {
     std::cout << "\n";
 
@@ -1607,13 +1942,19 @@ static void printAdminMenu() {
     hline('=');
     row("Key", "Option", BLACK);
     hline('=');
-    row("1", "View all users",         CYAN);
+    row("1", "View all users",         BLUE);
     hline('-');
-    row("2", "View all catalogs",      CYAN);
+    row("2", "View all catalogs",      BLUE);
     hline('-');
-    row("3", "Reset user password",    YELLOW);
+    row("3", "Reset user password",    BLUE);
     hline('-');
     row("4", "Delete user account",    RED);
+    hline('-');
+    row("5", "Add movie to public",    GREEN);   // ✅ new
+    hline('-');
+    row("6", "View public list",       GREEN);   // ✅ new
+    hline('-');
+    row("7", "Delete public movie",    RED);     // ✅ new
     hline('-');
     row("0", "Logout",                 RED);
     hline('=');
@@ -1687,7 +2028,9 @@ static void printMenu(const std::string& username) {
     hline('-');
     row("7", "Stats",  "View statistics",      CYAN);
     hline('-');
-    row("8", "Logout", "Switch account",       GREEN);
+    row("8", "Public", "View public movies",   GREEN);   // ✅ new
+    hline('-');
+    row("9", "Logout", "Switch account",       GREEN);
     hline('-');
     row("0", "Quit",   "Exit program",         RED);
     hline('=');
@@ -1776,6 +2119,22 @@ static void printRegisterSuccess(const std::string& username) {
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
     // system("cls");
 }
+static bool isStrongPassword(const std::string& pass) {
+    if ((int)pass.size() < 8) return false;
+    bool hasUpper = false, hasLower = false,
+         hasDigit = false, hasSpecial = false;
+    for (char c : pass) {
+        if (isupper(c))  hasUpper   = true;
+        if (islower(c))  hasLower   = true;
+        if (isdigit(c))  hasDigit   = true;
+        if (ispunct(c))  hasSpecial = true;
+    }
+    return hasUpper && hasLower && hasDigit && hasSpecial;
+}
+
+static std::string getPasswordRequirements() {
+    return "Password must have 8+ chars, upper, lower, number, special (!@#$)";
+}
 
 // ─── Auth Screen ─────────────────────────────────────────────────────────────
 static std::string authScreen() {
@@ -1826,6 +2185,9 @@ static std::string authScreen() {
         std::cout << sp << "│   2    │       Register       │\n";
         std::cout << MAGENTA;
         std::cout << sp << "├────────┼──────────────────────┤\n";
+        std::cout << sp << "│   3    │   Continue as Guest  │\n";
+        std::cout << MAGENTA;
+        std::cout << sp << "├────────┼──────────────────────┤\n";
         std::cout << MAGENTA;
         std::cout << sp << "│   0    │         Quit         │\n";
         std::cout << MAGENTA;
@@ -1837,7 +2199,7 @@ static std::string authScreen() {
         std::getline(std::cin, choiceStr);
         int choice = -1;
         try { choice = std::stoi(choiceStr); } catch (...) { choice = -1; }
-        if (choice < 0 || choice > 2) {
+        if (choice < 0 || choice > 3) {
             std::cout << "\n" << sp << RED << BOLD
                       << "[\xe2\x9c\x96] Invalid option! Please choose 0, 1, or 2." << RESET << "\n\n";
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -1849,6 +2211,10 @@ if (choice == 0) {
     printGoodbye();
     exit(0);
 }
+ if (choice == 3) {
+            return "guest";   // ✅ return special guest username
+        }
+
         std::cout << "\n";
 
         // ── Login / Register form centered ────────────
@@ -1893,19 +2259,93 @@ if (choice == 0) {
         std::cout << sp << "Username : ";
         std::string user;
         std::getline(std::cin, user);
+       // ✅ AFTER — only for register (choice == 2)
         std::cout << sp << "Password : ";
         std::string pass = "";
         char ch;
-        while ((ch = _getch()) != '\r') {    // '\r' = Enter on Windows
+        while ((ch = _getch()) != '\r') {
             if (ch == '\b' && !pass.empty()) {
                 pass.pop_back();
-                std::cout << "\b \b" << std::flush;  // erase the * on screen
+                std::cout << "\b \b" << std::flush;
             } else if (ch != '\b') {
                 pass += ch;
-                std::cout << '*' << std::flush;      // show * instead of character
+                std::cout << '*' << std::flush;
             }
         }
         std::cout << "\n";
+
+        // ✅ validate strong password only for register
+        if (choice == 2 && !isStrongPassword(pass)) {
+            system("cls");
+
+            int termW3 = getTermWidth();
+            int rpad   = (termW3 - 31) / 2;
+            if (rpad < 0) rpad = 0;
+            std::string rsp = std::string(rpad, ' ');
+
+            // reprint register ASCII
+            int termW4 = getTermWidth();
+            auto cl3 = [&](const std::string& s, int visualW) {
+                int p = (termW4 - visualW) / 2;
+                if (p < 0) p = 0;
+                std::cout << std::string(p, ' ') << s << "\n";
+            };
+            std::cout << "\n" << MAGENTA << BOLD;
+            cl3("██████╗ ███████╗ ██████╗ ██╗███████╗████████╗███████╗██████╗ ", 61);
+            cl3("██╔══██╗██╔════╝██╔════╝ ██║██╔════╝╚══██╔══╝██╔════╝██╔══██╗", 61);
+            cl3("██████╔╝█████╗  ██║  ███╗██║███████╗   ██║   █████╗  ██████╔╝", 61);
+            cl3("██╔══██╗██╔══╝  ██║   ██║██║╚════██║   ██║   ██╔══╝  ██╔══██╗", 61);
+            cl3("██║  ██║███████╗╚██████╔╝██║███████║   ██║   ███████╗██║  ██║", 61);
+            cl3("╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝", 61);
+            std::cout << RESET << "\n\n";
+
+            // ── password requirements box ─────────
+            int reqBoxW = 60;
+            int reqPad  = (termW4 - reqBoxW) / 2;
+            if (reqPad < 0) reqPad = 0;
+            std::string rp = std::string(reqPad, ' ');
+
+            std::cout << rp << RED << "+" << std::string(57, '=') << "+" << RESET << "\n";
+            std::cout << rp << RED << "|" << RESET
+                      << BOLD << RED << "           Weak Password! Please try again.        " << RESET
+                      << "      " << RED << "|" << RESET << "\n";
+            std::cout << rp << RED << "+" << std::string(18, '-') << "+" << std::string(38, '-') << "+" << RESET << "\n";
+            std::cout << rp << RED << "|" << RESET
+                      << " " << BLUE << BOLD << "Min Length       " << RESET
+                      << RED << "|" << RESET
+                      << " " << BLACK << "At least 8 characters              " << RESET
+                      << "  " << RED << "|" << RESET << "\n";
+            std::cout << rp << RED << "+" << std::string(18, '-') << "+" << std::string(38, '-') << "+" << RESET << "\n";
+            std::cout << rp << RED << "|" << RESET
+                      << " " << BLUE << BOLD << "Uppercase        " << RESET
+                      << RED << "|" << RESET
+                      << " " << BLACK << "At least one uppercase letter      " << RESET
+                      << "  " << RED << "|" << RESET << "\n";
+            std::cout << rp << RED << "+" << std::string(18, '-') << "+" << std::string(38, '-') << "+" << RESET << "\n";
+            std::cout << rp << RED << "|" << RESET
+                      << " " << BLUE << BOLD << "Lowercase        " << RESET
+                      << RED << "|" << RESET
+                      << " " << BLACK << "At least one lowercase letter      " << RESET
+                      << "  " << RED << "|" << RESET << "\n";
+            std::cout << rp << RED << "+" << std::string(18, '-') << "+" << std::string(38, '-') << "+" << RESET << "\n";
+            std::cout << rp << RED << "|" << RESET
+                      << " " << BLUE << BOLD << "Number           " << RESET
+                      << RED << "|" << RESET
+                      << " " << BLACK << "At least one digit (0-9)           " << RESET
+                      << "  " << RED << "|" << RESET << "\n";
+            std::cout << rp << RED << "+" << std::string(18, '-') << "+" << std::string(38, '-') << "+" << RESET << "\n";
+            std::cout << rp << RED << "|" << RESET
+                      << " " << BLUE << BOLD << "Special Char     " << RESET
+                      << RED << "|" << RESET
+                      << " " << BLACK << "At least one special (!@#$%^&*)    " << RESET
+                      << "  " << RED << "|" << RESET << "\n";
+            std::cout << rp << RED << "+" << std::string(57, '=') << "+" << RESET << "\n\n";
+
+            std::cout << rp << YELLOW << "Press Enter to try again..." << RESET;
+            while (_getch() != '\r') {}
+            system("cls");
+            continue;   // ✅ loop back to redraw auth screen
+        }
 
         if (choice == 1) {
             auto res = loginUser(user, pass);
@@ -1941,6 +2381,146 @@ if (choice == 0) {
     }
 }
 
+static void doGuest() {
+    system("cls");
+
+    int termW = getTermWidth();
+    auto cl = [&](const std::string& s, int visualW) {
+        int p = (termW - visualW) / 2;
+        if (p < 0) p = 0;
+        std::cout << std::string(p, ' ') << s << "\n";
+    };
+
+    // ── ASCII GUEST ───────────────────────────────
+    std::cout << "\n" << CYAN << BOLD;
+    cl("██████╗ ██╗   ██╗███████╗███████╗████████╗", 43);
+    cl("██╔══██╗██║   ██║██╔════╝██╔════╝╚══██╔══╝", 43);
+    cl("██║  ██║██║   ██║█████╗  ███████╗   ██║   ", 43);
+    cl("██║  ██║██║   ██║██╔══╝  ╚════██║   ██║   ", 43);
+    cl("██████╔╝╚██████╔╝███████╗███████║   ██║   ", 43);
+    cl("╚═════╝  ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ", 43);
+    std::cout << RESET << "\n";
+
+    // ── info box ──────────────────────────────────
+    int boxW = 50;
+    int bpad = (termW - boxW) / 2;
+    if (bpad < 0) bpad = 0;
+    std::string bp = std::string(bpad, ' ');
+
+    std::cout << bp << YELLOW << "+" << std::string(48, '=') << "+" << RESET << "\n";
+    std::cout << bp << YELLOW << "|" << RESET
+              << BOLD << BLACK << "   Guest Mode — Search Movies Only              " << RESET
+              << YELLOW << "|" << RESET << "\n";
+    std::cout << bp << YELLOW << "+" << std::string(16, '-')
+              << "+" << std::string(31, '-') << "+" << RESET << "\n";
+    std::cout << bp << YELLOW << "|" << RESET
+              << " " << BLUE << BOLD << "Access         " << RESET
+              << YELLOW << "|" << RESET
+              << " " << BLACK << "Search movie online only      " << RESET
+              << YELLOW << "|" << RESET << "\n";
+    std::cout << bp << YELLOW << "+" << std::string(16, '-')
+              << "+" << std::string(31, '-') << "+" << RESET << "\n";
+    std::cout << bp << YELLOW << "|" << RESET
+              << " " << BLUE << BOLD << "Restriction    " << RESET
+              << YELLOW << "|" << RESET
+              << " " << BLACK << "Cannot save to catalog        " << RESET
+              << YELLOW << "|" << RESET << "\n";
+    std::cout << bp << YELLOW << "+" << std::string(48, '=') << "+" << RESET << "\n\n";
+
+    // ── guest menu ────────────────────────────────
+    int menuW   = 44;
+    int menuPad = (termW - menuW) / 2;
+    if (menuPad < 0) menuPad = 0;
+    std::string mp = std::string(menuPad, ' ');
+
+    auto hline = [&](char fill) {
+        std::cout << mp << CYAN
+                  << "+" << std::string(8,  fill)
+                  << "+" << std::string(30, fill)
+                  << "+" << RESET << "\n";
+    };
+
+    auto row = [&](const std::string& k, const std::string& o,
+                   const std::string& color) {
+        std::string pk = k + std::string(6  - (int)k.size(), ' ');
+        std::string po = o + std::string(28 - (int)o.size(), ' ');
+        std::cout << mp << CYAN << "|" << RESET
+                  << " " << color << BOLD << pk << RESET << " "
+                  << CYAN << "|" << RESET
+                  << " " << color << po << RESET << " "
+                  << CYAN << "|" << RESET << "\n";
+    };
+
+    hline('=');
+    row("Key", "Option", BLACK);
+    hline('=');
+    row("1", "Search Movie Online", BLUE);
+    hline('-');
+    row("0", "Back to Login", RED);
+    hline('=');
+    std::cout << "\n";
+
+    // ── guest loop ────────────────────────────────
+    while (true) {
+        std::cout << BLUE << BOLD
+                  << centerPad(">> Choice: ") << RESET;
+        std::string choiceStr;
+        std::getline(std::cin, choiceStr);
+        int choice = -1;
+        try { choice = std::stoi(choiceStr); } catch (...) {}
+
+        if (choice == 1) {
+            // ── search only — no catalog to save to
+            // create a temporary empty catalog for search
+            Catalog tempCat;
+            tempCat.username = "guest";
+            doOMDb(tempCat);
+            // reprint guest menu after returning
+            system("cls");
+            std::cout << "\n" << CYAN << BOLD;
+            cl("██████╗ ██╗   ██╗███████╗███████╗████████╗", 43);
+            cl("██╔══██╗██║   ██║██╔════╝██╔════╝╚══██╔══╝", 43);
+            cl("██║  ██║██║   ██║█████╗  ███████╗   ██║   ", 43);
+            cl("██║  ██║██║   ██║██╔══╝  ╚════██║   ██║   ", 43);
+            cl("██████╔╝╚██████╔╝███████╗███████║   ██║   ", 43);
+            cl("╚═════╝  ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ", 43);
+            std::cout << RESET << "\n\n";
+            hline('=');
+            row("Key", "Option", BLACK);
+            hline('=');
+            row("1", "Search Movie Online", BLUE);
+            hline('-');
+            row("0", "Back to Login", RED);
+            hline('=');
+            std::cout << "\n";
+        } else if (choice == 0) {
+            system("cls");
+            return;   // ✅ go back to auth screen
+        } else {
+            std::cout << RED << BOLD
+                      << centerPad("Please enter 0 or 1.")
+                      << RESET << "\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            system("cls");
+            std::cout << "\n" << CYAN << BOLD;
+            cl("██████╗ ██╗   ██╗███████╗███████╗████████╗", 43);
+            cl("██╔══██╗██║   ██║██╔════╝██╔════╝╚══██╔══╝", 43);
+            cl("██║  ██║██║   ██║█████╗  ███████╗   ██║   ", 43);
+            cl("██║  ██║██║   ██║██╔══╝  ╚════██║   ██║   ", 43);
+            cl("██████╔╝╚██████╔╝███████╗███████║   ██║   ", 43);
+            cl("╚═════╝  ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ", 43);
+            std::cout << RESET << "\n\n";
+            hline('=');
+            row("Key", "Option", BLACK);
+            hline('=');
+            row("1", "Search Movie Online", BLUE);
+            hline('-');
+            row("0", "Back to Login", RED);
+            hline('=');
+            std::cout << "\n";
+        }
+    }
+}
 
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -1964,14 +2544,21 @@ int main() {
     while (_getch() != '\r') {}
     system("cls");
     while (true) {
-        std::string username = authScreen();
+       std::string username = authScreen();
         bool running = true;
 
-    if (username == "admin") {
+        if (username == "guest") {
+            doGuest();
+            continue;   // ✅ go back to auth screen after guest exits
+        } else if (username == "admin") {
         std::cout << "\n" << centerPad("Press Enter to access Admin Panel...") << YELLOW << BOLD;
         std::cout << RESET;
         while (_getch() != '\r') {}
         system("cls");                          // ✅ clears login screen
+
+        // ✅ AFTER — load shared catalog once
+        Catalog sharedCat = loadSharedCatalog();
+
         while (running) {
             printAdminMenu();
             std::cout << centerPad(">> Choice: ") << CYAN << BOLD;
@@ -1980,21 +2567,24 @@ int main() {
             std::getline(std::cin, choiceStr);
             int choice = -1;
             try { choice = std::stoi(choiceStr); } catch (...) {}
-            if (choice < 0 || choice > 4) {
-            std::cout << RED << BOLD
-                      << centerPad("Invalid option! Please enter 0-4.")
-                      << RESET << "\n";
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            system("cls");
-            continue;
-}
+            if (choice < 0 || choice > 7) {
+                std::cout << RED << BOLD
+                          << centerPad("Invalid option! Please enter 0-6.")
+                          << RESET << "\n";
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                system("cls");
+                continue;
+            }
             switch (choice) {
-                case 1: adminViewUsers();       break;
-                case 2: adminViewAllCatalogs(); break;
-                case 3: adminResetPassword();   break;
-                case 4: adminDeleteUser();      break;
+                case 1: adminViewUsers();                    break;
+                case 2: adminViewAllCatalogs();              break;
+                case 3: adminResetPassword();                break;
+                case 4: adminDeleteUser();                   break;
+                case 5: doAdminAddMovie(sharedCat);          break;
+                case 6: adminViewSharedCatalog(sharedCat);   break;
+                case 7: adminDeletePublicMovie(sharedCat);   break;  // ✅ new
                 case 0:
-                    system("cls");              // ✅ clear screen on logout
+                    system("cls");
                     running = false;
                     break;
             }
@@ -2013,7 +2603,7 @@ int main() {
             std::getline(std::cin, choiceStr);
             int choice = -1;
             try { choice = std::stoi(choiceStr); } catch (...) {}
-            if (choice < 0 || choice > 8) {
+            if (choice < 0 || choice > 9) {
                 std::cout << RED << BOLD
                           << centerPad("Invalid option! Please enter 0-8.")
                           << RESET << "\n";
@@ -2021,6 +2611,7 @@ int main() {
                 system("cls");
                 continue;
 }
+           // ✅ AFTER — full switch with case 8 added
             switch (choice) {
                 case 1: doList(cat);      break;
                 case 2: doView(cat);      break;
@@ -2029,8 +2620,38 @@ int main() {
                 case 5: doDelete(cat);    break;
                 case 6: doOMDb(cat);      break;
                 case 7: doStats(cat);     break;
-                case 8:
-                    system("cls");              // ✅ clear screen on logout
+                case 8: {
+                    // ✅ view public list — read only
+                    Catalog sharedCat = loadSharedCatalog();
+                    system("cls");
+                    int tw = getTermWidth();
+                    auto cl2 = [&](const std::string& s, int visualW) {
+                        int p = (tw - visualW) / 2;
+                        if (p < 0) p = 0;
+                        std::cout << std::string(p, ' ') << s << "\n";
+                    };
+                    std::cout << "\n" << CYAN << BOLD;
+                    cl2("██████╗ ██╗   ██╗██████╗ ██╗     ██╗ ██████╗    ██╗     ██╗███████╗████████╗", 79);
+                    cl2("██╔══██╗██║   ██║██╔══██╗██║     ██║██╔════╝    ██║     ██║██╔════╝╚══██╔══╝", 79);
+                    cl2("██████╔╝██║   ██║██████╔╝██║     ██║██║         ██║     ██║███████╗   ██║   ", 79);
+                    cl2("██╔═══╝ ██║   ██║██╔══██╗██║     ██║██║         ██║     ██║╚════██║   ██║   ", 79);
+                    cl2("██║     ╚██████╔╝██████╔╝███████╗██║╚██████╗    ███████╗██║███████║   ██║   ", 79);
+                    cl2("╚═╝      ╚═════╝ ╚═════╝ ╚══════╝╚═╝ ╚═════╝    ╚══════╝╚═╝╚══════╝   ╚═╝   ", 79);
+                    std::cout << RESET << "\n";
+                    if (sharedCat.entries.empty()) {
+                        std::cout << "\n" << RED << BOLD
+                                  << centerPad("No public movies yet.") << RESET << "\n\n";
+                    } else {
+                        printTable(sharedCat.entries, "Public List");
+                    }
+                    std::cout << BLUE << BOLD
+                              << centerPad("Press Enter to go back...") << RESET;
+                    while (_getch() != '\r') {}
+                    system("cls");
+                    break;
+                }
+                case 9:                        // ✅ was case 8
+                    system("cls");
                     running = false;
                     break;
                 case 0: printGoodbye(); return 0;

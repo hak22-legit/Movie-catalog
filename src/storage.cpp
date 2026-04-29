@@ -23,6 +23,7 @@ static Entry entryFromJson(const json& j) {
     e.genre      = j.value("genre",      "");
     e.year       = j.value("year",       0);
     e.rating     = j.value("rating",     0.0f);
+    e.posterUrl  = j.value("posterUrl", "");
     e.notes      = j.value("notes",      "");
     e.status     = toStatus(j.value("status","pending"));
     e.director   = j.value("director",   "");
@@ -39,6 +40,7 @@ static json entryToJson(const Entry& e) {
         {"genre",      e.genre},
         {"year",       e.year},
         {"rating",     e.rating},
+        {"posterUrl",  e.posterUrl},
         {"notes",      e.notes},
         {"status",     fromStatus(e.status)},
         {"director",   e.director},
@@ -91,4 +93,14 @@ void saveCatalog(const Catalog& cat) {
         j["entries"].push_back(entryToJson(e));
     std::ofstream f(catalogPath(cat.username));
     f << j.dump(2);
+}
+
+// ✅ add these two functions in storage.cpp
+Catalog loadSharedCatalog() {
+    return loadCatalog("public");  // shared catalog stored as public.json
+}
+
+void saveSharedCatalog(Catalog& cat) {
+    cat.username = "public";
+    saveCatalog(cat);
 }
